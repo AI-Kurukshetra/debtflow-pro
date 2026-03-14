@@ -62,8 +62,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 # Server-only (e.g. seed). Never expose to the client.
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# Protects the /api/seed endpoint
-SEED_SECRET=debtflow-seed-2026
+# Protects the /api/seed endpoint — set your own secret; do not commit or share
+SEED_SECRET=your-seed-secret
 ```
 
 ### 3. Database
@@ -78,11 +78,11 @@ Start the app, then run the seed once:
 npm run dev
 ```
 
-In another terminal:
+In another terminal (use the same value you set for `SEED_SECRET`):
 
 ```bash
 curl -X POST http://localhost:3000/api/seed \
-  -H "x-seed-secret: debtflow-seed-2026"
+  -H "x-seed-secret: your-seed-secret"
 ```
 
 ### 5. Run the app
@@ -137,10 +137,10 @@ debtflow-pro/
 
 1. Push the repo and import the project in Vercel.
 2. Add the same environment variables in the Vercel dashboard.
-3. Deploy. After the first deploy, run the seed once:
+3. Deploy. After the first deploy, run the seed once (use the same value as `SEED_SECRET` in Vercel):
    ```bash
    curl -X POST https://your-app.vercel.app/api/seed \
-     -H "x-seed-secret: debtflow-seed-2026"
+     -H "x-seed-secret: YOUR_SEED_SECRET"
    ```
 4. Confirm:
    - Login at `/login` with the demo credentials
