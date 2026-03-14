@@ -55,15 +55,6 @@ export default function PortalPage() {
         </div>
       </header>
 
-      {/* ── Info banner: no traditional login required ───────────────────── */}
-      <div className="border-b border-blue-100 bg-blue-50 px-4 py-2.5 text-center sm:px-6">
-        <p className="text-xs text-blue-700">
-          <ShieldCheck className="mr-1.5 inline h-3.5 w-3.5 align-middle" />
-          No password needed — your email and reference number are your secure access credentials.
-          Your session is preserved for this browser tab.
-        </p>
-      </div>
-
       {/* ── Main layout ──────────────────────────────────────────────────── */}
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-10 lg:py-16">
         <div className="grid min-w-0 grid-cols-1 items-start gap-6 sm:gap-8 xl:grid-cols-[420px_minmax(0,1fr)] 2xl:grid-cols-[460px_minmax(0,1fr)]">
