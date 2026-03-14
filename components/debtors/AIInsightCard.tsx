@@ -45,8 +45,8 @@ export function AIInsightCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">AI Risk Assessment</CardTitle>
           {canManage ? (
-            <Button variant="ghost" size="sm" onClick={reanalyze} disabled={loading} className="text-xs">
-              {loading ? 'Analyzing...' : 'Re-analyze'}
+            <Button variant="ghost" size="sm" onClick={reanalyze} loading={loading} className="text-xs">
+              Re-analyze
             </Button>
           ) : null}
         </div>
@@ -83,8 +83,8 @@ export function AIInsightCard({
           <div className="text-center py-4">
             <p className="text-sm text-gray-500 mb-3">No risk analysis yet</p>
             {canManage ? (
-              <Button size="sm" onClick={reanalyze} disabled={loading}>
-                {loading ? 'Analyzing...' : 'Run AI Analysis'}
+              <Button size="sm" onClick={reanalyze} loading={loading}>
+                Run AI Analysis
               </Button>
             ) : (
               <p className="text-xs text-gray-400">Viewer access can review results, but not rerun scoring.</p>

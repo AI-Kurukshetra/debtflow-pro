@@ -129,8 +129,8 @@ export function CampaignForm({ onCreated, orgId }: { onCreated: () => void; orgI
         <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading}>
-        {loading ? 'Creating...' : 'Create campaign'}
+      <Button type="submit" loading={loading}>
+        Create campaign
       </Button>
     </form>
   )

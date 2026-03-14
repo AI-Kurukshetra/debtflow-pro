@@ -85,9 +85,9 @@ export function CampaignRecipientTable({
                     size="sm"
                     variant="outline"
                     onClick={() => logResponse(row.debtor_id)}
-                    disabled={loadingId === row.debtor_id}
+                    loading={loadingId === row.debtor_id}
                   >
-                    {loadingId === row.debtor_id ? 'Saving...' : 'Log Response'}
+                    Log Response
                   </Button>
                 ) : row.status === 'responded' ? (
                   <span className="text-xs font-medium text-green-600">Logged</span>

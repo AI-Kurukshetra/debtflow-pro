@@ -53,8 +53,8 @@ export default function LoginPage() {
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button className="w-full" type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
+          <Button className="w-full" type="submit" loading={loading}>
+            Sign in
           </Button>
         </form>
 

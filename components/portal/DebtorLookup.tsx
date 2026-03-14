@@ -1,13 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import { CheckCircle2, CreditCard, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle2, CreditCard, LockKeyhole, LogOut, ShieldCheck, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { StatusBadge } from '@/components/debtors/StatusBadge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
-import type { PortalAccountSummary, PortalLookupRequest, PortalPaymentRequest, Tables } from '@/lib/types'
+import {
+  savePortalSession,
+  readPortalSession,
+  clearPortalSession,
+} from '@/lib/portalSession'
+import type {
+  PortalAccountSummary,
+  PortalLookupRequest,
+  PortalPaymentRequest,
+  Tables,
+} from '@/lib/types'
 
 type PortalDebtor = Pick<
   Tables<'debtors'>,
@@ -59,11 +69,13 @@ function validateExpiry(expiry: string): string | null {
   const [mm, yy] = expiry.split('/').map((s) => s.trim())
   const month = parseInt(mm, 10)
   const year = parseInt(yy, 10)
-  if (Number.isNaN(month) || Number.isNaN(year) || month < 1 || month > 12) return 'Enter a valid expiry date (MM/YY).'
+  if (Number.isNaN(month) || Number.isNaN(year) || month < 1 || month > 12)
+    return 'Enter a valid expiry date (MM/YY).'
   const now = new Date()
   const currentYear = now.getFullYear() % 100
   const currentMonth = now.getMonth() + 1
-  if (year < currentYear || (year === currentYear && month < currentMonth)) return 'Card has expired.'
+  if (year < currentYear || (year === currentYear && month < currentMonth))
+    return 'Card has expired.'
   return null
 }
 
@@ -78,7 +90,8 @@ function validateCVV(cvv: string, cardNumber: string): string | null {
 function validateCardholderName(name: string): string | null {
   const trimmed = name.trim()
   if (trimmed.length < 2) return 'Enter the full name as it appears on the card.'
-  if (!/^[\p{L}\p{M}\s\-'.]+$/u.test(trimmed)) return 'Cardholder name can only contain letters, spaces, and hyphens.'
+  if (!/^[\p{L}\p{M}\s\-'.]+$/u.test(trimmed))
+    return 'Cardholder name can only contain letters, spaces, and hyphens.'
   return null
 }
 
@@ -90,13 +103,20 @@ type CardFieldErrors = {
 }
 
 export function DebtorLookup() {
+  // ── Form state ────────────────────────────────────────────────────────────
   const [email, setEmail] = useState('')
   const [reference, setReference] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // ── Session / account state ───────────────────────────────────────────────
+  /** null = not yet checked; 'restoring' = validating stored session */
+  const [sessionStatus, setSessionStatus] = useState<'idle' | 'restoring'>('restoring')
   const [debtor, setDebtor] = useState<PortalDebtor | null>(null)
   const [plan, setPlan] = useState<PortalPlan | null>(null)
   const [payments, setPayments] = useState<PortalPaymentHistoryItem[]>([])
+
+  // ── Payment form state ────────────────────────────────────────────────────
   const [amount, setAmount] = useState('')
   const [cardholderName, setCardholderName] = useState('')
   const [cardNumber, setCardNumber] = useState('')
@@ -110,6 +130,64 @@ export function DebtorLookup() {
     methodLabel: string
   } | null>(null)
 
+  // ── On mount: try to restore an existing session ──────────────────────────
+  useEffect(() => {
+    async function tryRestoreSession() {
+      const stored = readPortalSession()
+      if (!stored) {
+        setSessionStatus('idle')
+        return
+      }
+
+      // Re-validate the stored session against the DB
+      try {
+        const res = await fetch('/api/portal/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: stored.email,
+            reference_number: stored.reference_number,
+          } satisfies PortalLookupRequest),
+        })
+        const result = (await res.json()) as { valid: boolean }
+
+        if (!result.valid) {
+          clearPortalSession()
+          setSessionStatus('idle')
+          return
+        }
+
+        // Session still valid — re-fetch full account data silently
+        const lookupRes = await fetch('/api/portal/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: stored.email,
+            reference_number: stored.reference_number,
+          } satisfies PortalLookupRequest),
+        })
+        const data = (await lookupRes.json()) as PortalAccountSummary & { error?: string }
+
+        if (!lookupRes.ok || !data.debtor) {
+          clearPortalSession()
+          setSessionStatus('idle')
+          return
+        }
+
+        setDebtor(data.debtor as PortalDebtor)
+        setPlan(data.plan ?? null)
+        setPayments(data.payments ?? [])
+      } catch {
+        clearPortalSession()
+      } finally {
+        setSessionStatus('idle')
+      }
+    }
+
+    void tryRestoreSession()
+  }, [])
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
   function resetPaymentForm() {
     setAmount('')
     setCardholderName('')
@@ -133,11 +211,20 @@ export function DebtorLookup() {
     return `${digits.slice(0, 2)}/${digits.slice(2)}`
   }
 
-  const maskedCard = cardNumber
-    ? cardNumber.padEnd(19, '•')
-    : '4242 4242 4242 4242'
-  const cardDisplayName = cardholderName.trim() || 'CARDHOLDER NAME'
+  function handleSignOut() {
+    clearPortalSession()
+    setDebtor(null)
+    setPlan(null)
+    setPayments([])
+    setSuccess(false)
+    setPaymentReceipt(null)
+    setError(null)
+    setEmail('')
+    setReference('')
+    resetPaymentForm()
+  }
 
+  // ── Lookup / account fetch ────────────────────────────────────────────────
   async function lookup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -163,11 +250,23 @@ export function DebtorLookup() {
       return
     }
 
-    setDebtor(result.debtor as PortalDebtor)
+    const resolvedDebtor = result.debtor as PortalDebtor
+
+    // ── Persist the session so page refresh keeps the debtor signed in ──────
+    savePortalSession({
+      email: email.trim().toLowerCase(),
+      reference_number: reference.trim().toUpperCase(),
+      full_name: resolvedDebtor.full_name ?? '',
+      debtor_id: resolvedDebtor.id,
+      verified_at: new Date().toISOString(),
+    })
+
+    setDebtor(resolvedDebtor)
     setPlan(result.plan ?? null)
     setPayments(result.payments ?? [])
   }
 
+  // ── Payment submission ────────────────────────────────────────────────────
   async function makePayment() {
     if (!debtor) return
 
@@ -188,7 +287,8 @@ export function DebtorLookup() {
     const errs: CardFieldErrors = {}
     const nameErr = validateCardholderName(cardholderName)
     if (nameErr) errs.cardholderName = nameErr
-    if (rawCard.length < 13 || rawCard.length > 19) errs.cardNumber = 'Card number must be 13–19 digits.'
+    if (rawCard.length < 13 || rawCard.length > 19)
+      errs.cardNumber = 'Card number must be 13–19 digits.'
     else if (!luhnCheck(cardNumber)) errs.cardNumber = 'Card number is invalid.'
     const expiryErr = validateExpiry(expiry)
     if (expiryErr) errs.expiry = expiryErr
@@ -250,6 +350,27 @@ export function DebtorLookup() {
     ])
   }
 
+  // ── Derived values ────────────────────────────────────────────────────────
+  const maskedCard = cardNumber ? cardNumber.padEnd(19, '•') : '4242 4242 4242 4242'
+  const cardDisplayName = cardholderName.trim() || 'CARDHOLDER NAME'
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Loading / restoring session
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (sessionStatus === 'restoring') {
+    return (
+      <Card className="w-full min-w-0 overflow-hidden border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+        <CardContent className="flex flex-col items-center justify-center gap-4 p-10">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-sm text-slate-500">Checking your session…</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Payment success receipt
+  // ═══════════════════════════════════════════════════════════════════════════
   if (success && debtor) {
     return (
       <Card className="w-full min-w-0 border-emerald-100 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.12)]">
@@ -258,11 +379,16 @@ export function DebtorLookup() {
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
               <CheckCircle2 className="h-6 w-6" />
             </div>
-            <div className="mt-3 text-sm font-medium uppercase tracking-[0.2em] text-emerald-700">Payment Approved</div>
+            <div className="mt-3 text-sm font-medium uppercase tracking-[0.2em] text-emerald-700">
+              Payment Approved
+            </div>
             <p className="mt-2 text-sm text-gray-600">
-              Your payment has been applied successfully. Updated balance:
+              Your payment has been applied successfully. Updated balance:{' '}
               <span className="ml-1 font-semibold text-gray-900">
-                {formatCurrency(Number(debtor.outstanding_amount), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatCurrency(Number(debtor.outstanding_amount), {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </span>
             </p>
           </div>
@@ -275,7 +401,12 @@ export function DebtorLookup() {
             <div className="flex items-center justify-between py-3 text-sm">
               <span className="text-gray-500">Amount paid</span>
               <span className="font-semibold text-gray-900">
-                {paymentReceipt ? formatCurrency(paymentReceipt.amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                {paymentReceipt
+                  ? formatCurrency(paymentReceipt.amount, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                  : '-'}
               </span>
             </div>
             <div className="flex items-center justify-between border-t border-dashed border-gray-200 py-3 text-sm">
@@ -290,26 +421,35 @@ export function DebtorLookup() {
             </div>
           </div>
 
-          <Button className="mt-4 w-full" onClick={() => setSuccess(false)}>
-            Make another payment
-          </Button>
+          <div className="mt-4 flex gap-3">
+            <Button className="flex-1" onClick={() => setSuccess(false)}>
+              Make another payment
+            </Button>
+            <Button
+              variant="outline"
+              className="flex items-center gap-1.5"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </Button>
+          </div>
         </CardContent>
       </Card>
     )
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Authenticated account dashboard
+  // ═══════════════════════════════════════════════════════════════════════════
   if (debtor) {
     const balance = Number(debtor.outstanding_amount)
     const isSettled = balance <= 0
-    const nextInstallment = plan?.installments.find((installment) => installment.status !== 'paid') ?? null
+    const nextInstallment =
+      plan?.installments.find((installment) => installment.status !== 'paid') ?? null
     const quickAmounts = [
       ...(nextInstallment
-        ? [
-            {
-              label: 'Pay next installment',
-              value: Number(nextInstallment.amount),
-            },
-          ]
+        ? [{ label: 'Pay next installment', value: Number(nextInstallment.amount) }]
         : []),
       { label: 'Pay $100', value: 100 },
       { label: 'Pay $250', value: 250 },
@@ -320,29 +460,60 @@ export function DebtorLookup() {
     return (
       <Card className="w-full min-w-0 overflow-hidden border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.12)]">
         <CardContent className="p-0">
+          {/* ── Account header with sign-out ─────────────────────────────── */}
           <div className="border-b border-slate-100 bg-[linear-gradient(180deg,rgba(248,250,252,0.95),rgba(255,255,255,0.92))] px-4 py-4 sm:px-6 sm:py-5">
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Borrower account</div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Borrower account
+                </div>
                 <h2 className="mt-2 text-xl font-semibold text-gray-900 sm:text-2xl">
                   Hello, {debtor.full_name?.trim() || 'there'}
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">Reference {debtor.reference_number}</p>
+                <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                  <span>Reference {debtor.reference_number}</span>
+                  {debtor.email && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span>{debtor.email}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="self-start rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                <LockKeyhole className="mr-1 inline h-3.5 w-3.5" />
-                Verified session
+              <div className="flex items-center gap-2 self-start">
+                <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  <LockKeyhole className="mr-1 inline h-3.5 w-3.5" />
+                  Verified session
+                </div>
+                {/* Sign-out */}
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  title="Sign out of this portal session"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sign out
+                </button>
               </div>
             </div>
           </div>
+
+          {/* ── Main grid ─────────────────────────────────────────────────── */}
           <div className="grid min-w-0 gap-4 p-4 sm:gap-6 sm:p-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
+            {/* Left column — balance, plan, payments */}
             <div className="min-w-0 space-y-4">
+              {/* Balance card */}
               <div className="min-w-0 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_38%,#0f766e_100%)] p-4 text-white shadow-sm sm:rounded-[28px] sm:p-5">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <div className="min-w-0">
-                    <div className="text-xs uppercase tracking-[0.2em] text-sky-100/80">Outstanding balance</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-sky-100/80">
+                      Outstanding balance
+                    </div>
                     <div className="mt-2 text-xl font-semibold sm:text-2xl xl:text-3xl">
-                      {formatCurrency(balance, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(balance, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </div>
                   </div>
                   <div className="self-start rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
@@ -355,15 +526,20 @@ export function DebtorLookup() {
                 </div>
               </div>
 
+              {/* Status row */}
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Account status</div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Account status
+                  </div>
                   <div className="mt-2">
                     <StatusBadge status={debtor.status} />
                   </div>
                 </div>
                 <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Plan status</div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Plan status
+                  </div>
                   <div className="mt-2 text-sm text-gray-700">
                     {plan
                       ? `${plan.installments_paid} of ${plan.installments_total} installments paid`
@@ -372,11 +548,14 @@ export function DebtorLookup() {
                 </div>
               </div>
 
+              {/* Installment schedule */}
               {plan ? (
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900">Installment schedule</h3>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Installment schedule
+                      </h3>
                       <p className="text-xs text-gray-500">
                         Review upcoming due dates and completed installments for your active plan.
                       </p>
@@ -425,18 +604,18 @@ export function DebtorLookup() {
                                     Installment #{index + 1}
                                   </div>
                                   <div className="mt-2 text-lg font-semibold text-slate-900">
-                                    {formatCurrency(Number(installment.amount), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {formatCurrency(Number(installment.amount), {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
                                   </div>
                                 </div>
                                 <span
-                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                    INSTALLMENT_STATUS_CLASS[installment.status]
-                                  }`}
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${INSTALLMENT_STATUS_CLASS[installment.status]}`}
                                 >
                                   {INSTALLMENT_STATUS_LABEL[installment.status]}
                                 </span>
                               </div>
-
                               <div className="mt-5 space-y-3">
                                 <div>
                                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -470,17 +649,19 @@ export function DebtorLookup() {
                 </div>
               ) : null}
 
+              {/* Recent payments */}
               <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                    <div className="min-w-0">
-                      <h3 className="text-base font-semibold text-gray-900">Recent payments</h3>
-                      <p className="text-xs text-gray-500">Review your latest completed payments on this account.</p>
-                    </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-gray-900">Recent payments</h3>
+                    <p className="text-xs text-gray-500">
+                      Review your latest completed payments on this account.
+                    </p>
+                  </div>
                   <div className="self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
                     {payments.length} recorded
                   </div>
                 </div>
-
                 <div className="mt-4 space-y-3">
                   {payments.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-500">
@@ -494,7 +675,10 @@ export function DebtorLookup() {
                       >
                         <div>
                           <div className="text-sm font-medium text-slate-900">
-                            {formatCurrency(Number(payment.amount), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {formatCurrency(Number(payment.amount), {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
                             {formatDateTime(payment.created_at ?? payment.payment_date)}
@@ -513,6 +697,7 @@ export function DebtorLookup() {
               </div>
             </div>
 
+            {/* Right column — payment form / settled state */}
             <div className="min-w-0 space-y-4 xl:sticky xl:top-6">
               {isSettled ? (
                 <div className="rounded-[28px] border border-emerald-100 bg-[linear-gradient(180deg,#f0fdf4_0%,#ffffff_100%)] p-5 shadow-sm">
@@ -527,192 +712,238 @@ export function DebtorLookup() {
                       Paid in full
                     </div>
                   </div>
-
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     <div className="rounded-2xl border border-emerald-100 bg-white/90 p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Outstanding balance</div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Outstanding balance
+                      </div>
                       <div className="mt-2 text-2xl font-semibold text-emerald-700">
                         {formatCurrency(0, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-emerald-100 bg-white/90 p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Latest status</div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Latest status
+                      </div>
                       <div className="mt-2 text-sm text-slate-700">
                         This account is closed for payment and retained here for reference only.
                       </div>
                     </div>
                   </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
                 </div>
               ) : (
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900">Payment details</h3>
-                  <p className="text-xs text-gray-500">Complete your balance securely with the method below.</p>
-                </div>
-                <div className="self-start rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                  <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
-                  SSL secured
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Payment amount</label>
-                  <Input
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[$,]/g, ''))}
-                    placeholder="250.00"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {quickAmounts.map((option) => (
-                      <button
-                        key={option.label}
-                        type="button"
-                        className="min-h-[36px] rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:border-sky-300 hover:bg-sky-50 active:bg-sky-100 sm:py-1"
-                        onClick={() => setAmount(option.value.toFixed(2))}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
-                      <CreditCard className="h-5 w-5" />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900">Payment details</h3>
+                      <p className="text-xs text-gray-500">
+                        Complete your balance securely with the method below.
+                      </p>
                     </div>
+                    <div className="self-start rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                      <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
+                      SSL secured
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {/* Amount */}
                     <div>
-                      <div className="text-sm font-medium text-slate-900">Credit or debit card</div>
-                      <div className="text-xs text-slate-500">Instant approval</div>
+                      <label className="text-sm font-medium text-gray-700">Payment amount</label>
+                      <Input
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value.replace(/[$,]/g, ''))}
+                        placeholder="250.00"
+                        className="mt-1"
+                      />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {quickAmounts.map((option) => (
+                          <button
+                            key={option.label}
+                            type="button"
+                            className="min-h-[36px] rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:border-sky-300 hover:bg-sky-50 active:bg-sky-100 sm:py-1"
+                            onClick={() => setAmount(option.value.toFixed(2))}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:rounded-[24px]">
-                    <div className="min-w-0 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1e293b_55%,#3b82f6_100%)] p-3 text-white shadow-sm sm:rounded-[24px] sm:p-4">
-                      <div className="flex min-w-0 items-center justify-between text-[10px] uppercase tracking-[0.1em] text-white/70 sm:tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">
-                        <span className="truncate">Virtual card</span>
-                        <span className="shrink-0">DebtFlow Pay</span>
-                      </div>
-                      <div className="mt-4 min-w-0 break-all text-sm font-medium tracking-[0.1em] sm:mt-7 sm:text-base sm:tracking-[0.12em] sm:text-lg sm:tracking-[0.24em]">
-                        {maskedCard}
-                      </div>
-                      <div className="mt-4 flex min-w-0 flex-wrap items-end justify-between gap-3 sm:mt-5">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[10px] uppercase tracking-[0.1em] text-white/60 sm:tracking-[0.18em]">Cardholder</div>
-                          <div className="mt-1 truncate text-sm font-medium">{cardDisplayName}</div>
+                    {/* Payment method label */}
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
+                          <CreditCard className="h-5 w-5" />
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-[10px] uppercase tracking-[0.1em] text-white/60 sm:tracking-[0.18em]">Expires</div>
-                          <div className="mt-1 text-sm font-medium">{expiry || '08/28'}</div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">
+                            Credit or debit card
+                          </div>
+                          <div className="text-xs text-slate-500">Instant approval</div>
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="text-sm font-medium text-slate-900">Card information</div>
-                      <div className="text-xs text-slate-500">Visa · Mastercard · Amex</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Cardholder name</label>
-                      <Input
-                        value={cardholderName}
-                        onChange={(e) => {
-                          setCardholderName(e.target.value)
-                          if (cardErrors.cardholderName) setCardErrors((prev) => ({ ...prev, cardholderName: undefined }))
-                        }}
-                        placeholder="As shown on card"
-                        className={`mt-1 ${cardErrors.cardholderName ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
-                        aria-invalid={!!cardErrors.cardholderName}
-                        aria-describedby={cardErrors.cardholderName ? 'cardholder-name-error' : undefined}
-                      />
-                      {cardErrors.cardholderName && (
-                        <p id="cardholder-name-error" className="mt-1 text-xs text-red-600">
-                          {cardErrors.cardholderName}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Card number</label>
-                      <Input
-                        value={cardNumber}
-                        onChange={(e) => {
-                          setCardNumber(formatCardNumber(e.target.value))
-                          if (cardErrors.cardNumber) setCardErrors((prev) => ({ ...prev, cardNumber: undefined }))
-                        }}
-                        placeholder="4242 4242 4242 4242"
-                        inputMode="numeric"
-                        maxLength={19}
-                        className={`mt-1 ${cardErrors.cardNumber ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
-                        aria-invalid={!!cardErrors.cardNumber}
-                        aria-describedby={cardErrors.cardNumber ? 'card-number-error' : undefined}
-                      />
-                      {cardErrors.cardNumber && (
-                        <p id="card-number-error" className="mt-1 text-xs text-red-600">
-                          {cardErrors.cardNumber}
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                    {/* Card form with live preview */}
+                    <div className="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:rounded-[24px]">
+                      {/* Virtual card preview */}
+                      <div className="min-w-0 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1e293b_55%,#3b82f6_100%)] p-3 text-white shadow-sm sm:rounded-[24px] sm:p-4">
+                        <div className="flex min-w-0 items-center justify-between text-[10px] uppercase tracking-[0.1em] text-white/70 sm:tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">
+                          <span className="truncate">Virtual card</span>
+                          <span className="shrink-0">DebtFlow Pay</span>
+                        </div>
+                        <div className="mt-4 min-w-0 break-all text-sm font-medium tracking-[0.1em] sm:mt-7 sm:text-base sm:tracking-[0.12em] sm:text-lg sm:tracking-[0.24em]">
+                          {maskedCard}
+                        </div>
+                        <div className="mt-4 flex min-w-0 flex-wrap items-end justify-between gap-3 sm:mt-5">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] uppercase tracking-[0.1em] text-white/60 sm:tracking-[0.18em]">
+                              Cardholder
+                            </div>
+                            <div className="mt-1 truncate text-sm font-medium">
+                              {cardDisplayName}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-[10px] uppercase tracking-[0.1em] text-white/60 sm:tracking-[0.18em]">
+                              Expires
+                            </div>
+                            <div className="mt-1 text-sm font-medium">{expiry || '08/28'}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-sm font-medium text-slate-900">Card information</div>
+                        <div className="text-xs text-slate-500">Visa · Mastercard · Amex</div>
+                      </div>
+
+                      {/* Cardholder name */}
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Expiry</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Cardholder name
+                        </label>
                         <Input
-                          value={expiry}
+                          value={cardholderName}
                           onChange={(e) => {
-                            setExpiry(formatExpiry(e.target.value))
-                            if (cardErrors.expiry) setCardErrors((prev) => ({ ...prev, expiry: undefined }))
+                            setCardholderName(e.target.value)
+                            if (cardErrors.cardholderName)
+                              setCardErrors((prev) => ({ ...prev, cardholderName: undefined }))
                           }}
-                          placeholder="MM/YY"
-                          inputMode="numeric"
-                          maxLength={5}
-                          className={`mt-1 ${cardErrors.expiry ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
-                          aria-invalid={!!cardErrors.expiry}
-                          aria-describedby={cardErrors.expiry ? 'expiry-error' : undefined}
+                          placeholder="As shown on card"
+                          className={`mt-1 ${cardErrors.cardholderName ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
+                          aria-invalid={!!cardErrors.cardholderName}
+                          aria-describedby={
+                            cardErrors.cardholderName ? 'cardholder-name-error' : undefined
+                          }
                         />
-                        {cardErrors.expiry && (
-                          <p id="expiry-error" className="mt-1 text-xs text-red-600">
-                            {cardErrors.expiry}
+                        {cardErrors.cardholderName && (
+                          <p id="cardholder-name-error" className="mt-1 text-xs text-red-600">
+                            {cardErrors.cardholderName}
                           </p>
                         )}
                       </div>
+
+                      {/* Card number */}
                       <div>
-                        <label className="text-sm font-medium text-gray-700">CVV</label>
+                        <label className="text-sm font-medium text-gray-700">Card number</label>
                         <Input
-                          value={cvv}
+                          value={cardNumber}
                           onChange={(e) => {
-                            setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))
-                            if (cardErrors.cvv) setCardErrors((prev) => ({ ...prev, cvv: undefined }))
+                            setCardNumber(formatCardNumber(e.target.value))
+                            if (cardErrors.cardNumber)
+                              setCardErrors((prev) => ({ ...prev, cardNumber: undefined }))
                           }}
-                          placeholder="123"
+                          placeholder="4242 4242 4242 4242"
                           inputMode="numeric"
-                          maxLength={4}
-                          className={`mt-1 ${cardErrors.cvv ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
-                          aria-invalid={!!cardErrors.cvv}
-                          aria-describedby={cardErrors.cvv ? 'cvv-error' : undefined}
+                          maxLength={19}
+                          className={`mt-1 ${cardErrors.cardNumber ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
+                          aria-invalid={!!cardErrors.cardNumber}
+                          aria-describedby={
+                            cardErrors.cardNumber ? 'card-number-error' : undefined
+                          }
                         />
-                        {cardErrors.cvv && (
-                          <p id="cvv-error" className="mt-1 text-xs text-red-600">
-                            {cardErrors.cvv}
+                        {cardErrors.cardNumber && (
+                          <p id="card-number-error" className="mt-1 text-xs text-red-600">
+                            {cardErrors.cardNumber}
                           </p>
                         )}
+                      </div>
+
+                      {/* Expiry + CVV */}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Expiry</label>
+                          <Input
+                            value={expiry}
+                            onChange={(e) => {
+                              setExpiry(formatExpiry(e.target.value))
+                              if (cardErrors.expiry)
+                                setCardErrors((prev) => ({ ...prev, expiry: undefined }))
+                            }}
+                            placeholder="MM/YY"
+                            inputMode="numeric"
+                            maxLength={5}
+                            className={`mt-1 ${cardErrors.expiry ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
+                            aria-invalid={!!cardErrors.expiry}
+                            aria-describedby={cardErrors.expiry ? 'expiry-error' : undefined}
+                          />
+                          {cardErrors.expiry && (
+                            <p id="expiry-error" className="mt-1 text-xs text-red-600">
+                              {cardErrors.expiry}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">CVV</label>
+                          <Input
+                            value={cvv}
+                            onChange={(e) => {
+                              setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))
+                              if (cardErrors.cvv)
+                                setCardErrors((prev) => ({ ...prev, cvv: undefined }))
+                            }}
+                            placeholder="123"
+                            inputMode="numeric"
+                            maxLength={4}
+                            className={`mt-1 ${cardErrors.cvv ? 'border-red-500 focus-visible:ring-red-500/20' : ''}`}
+                            aria-invalid={!!cardErrors.cvv}
+                            aria-describedby={cardErrors.cvv ? 'cvv-error' : undefined}
+                          />
+                          {cardErrors.cvv && (
+                            <p id="cvv-error" className="mt-1 text-xs text-red-600">
+                              {cardErrors.cvv}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  <div className="mt-4 rounded-[24px] border border-dashed border-gray-200 bg-gray-50/70 p-4 text-xs leading-6 text-gray-500">
+                    Payments are processed securely. Your balance and payment history update in real
+                    time.
+                  </div>
+
+                  {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+                  <Button
+                    onClick={makePayment}
+                    loading={loading}
+                    className="mt-4 h-11 w-full text-sm font-semibold"
+                  >
+                    Confirm payment
+                  </Button>
                 </div>
-              </div>
               )}
-
-              <div className="rounded-[24px] border border-dashed border-gray-200 bg-gray-50/70 p-4 text-xs leading-6 text-gray-500">
-                Payments are processed securely. Your balance and payment history update in real time.
-              </div>
-
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              {!isSettled ? (
-                <Button onClick={makePayment} disabled={loading} className="h-11 w-full text-sm font-semibold">
-                  {loading ? 'Processing secure payment...' : 'Confirm payment'}
-                </Button>
-              ) : null}
             </div>
           </div>
         </CardContent>
@@ -720,6 +951,9 @@ export function DebtorLookup() {
     )
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Lookup form (unauthenticated state)
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <Card className="w-full min-w-0 overflow-hidden border-white/80 bg-white/95 shadow-[0_20px_60px_rgba(15,23,42,0.12)]">
       <CardContent className="p-4 sm:p-6">
@@ -727,37 +961,57 @@ export function DebtorLookup() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.18em] text-white/65">Secure access</div>
-              <h1 className="mt-2 text-2xl font-semibold">Account lookup</h1>
+              <h2 className="mt-2 text-2xl font-semibold">Account lookup</h2>
             </div>
-            <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">Borrower portal</div>
+            <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
+              Borrower portal
+            </div>
           </div>
           <p className="mt-3 text-sm leading-6 text-white/80">
             Enter your email and reference number to review your account and continue to payment.
           </p>
         </div>
+
         <form className="mt-6 space-y-4" onSubmit={lookup}>
           <div>
             <label className="text-sm font-medium text-gray-700">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              className="mt-1"
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700">Reference number</label>
-            <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Enter your reference number" required />
+            <Input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Enter your reference number"
+              required
+              className="mt-1"
+            />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Searching...' : 'Find my account'}
+          <Button type="submit" className="w-full" loading={loading}>
+            Find my account
           </Button>
         </form>
+
         <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
               <ShieldCheck className="h-4 w-4 text-emerald-600" />
             </div>
             <div>
-              <div className="text-sm font-medium text-slate-900">Need help finding your account?</div>
+              <div className="text-sm font-medium text-slate-900">
+                Need help finding your account?
+              </div>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                Contact your lender and keep your exact reference number ready to speed up verification.
+                Contact your lender and keep your exact reference number ready to speed up
+                verification.
               </p>
             </div>
           </div>

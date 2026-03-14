@@ -29,7 +29,7 @@ export default function PortalPage() {
       className="min-h-screen overflow-x-hidden bg-slate-50"
       style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}
     >
-      {/* Top nav bar */}
+      {/* ── Top nav bar ──────────────────────────────────────────────────── */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <Link
@@ -39,6 +39,7 @@ export default function PortalPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to home
           </Link>
+
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-blue-600 flex items-center justify-center">
               <TrendingUp className="h-3.5 w-3.5 text-white" />
@@ -47,13 +48,23 @@ export default function PortalPage() {
               DebtFlow<span className="text-blue-600">Pro</span>
             </span>
           </div>
+
           <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
             Borrower Portal
           </span>
         </div>
       </header>
 
-      {/* Main layout: on mobile, lookup form first (order-1); on xl+, info panel left (order-1) */}
+      {/* ── Info banner: no traditional login required ───────────────────── */}
+      <div className="border-b border-blue-100 bg-blue-50 px-4 py-2.5 text-center sm:px-6">
+        <p className="text-xs text-blue-700">
+          <ShieldCheck className="mr-1.5 inline h-3.5 w-3.5 align-middle" />
+          No password needed — your email and reference number are your secure access credentials.
+          Your session is preserved for this browser tab.
+        </p>
+      </div>
+
+      {/* ── Main layout ──────────────────────────────────────────────────── */}
       <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-10 lg:py-16">
         <div className="grid min-w-0 grid-cols-1 items-start gap-6 sm:gap-8 xl:grid-cols-[420px_minmax(0,1fr)] 2xl:grid-cols-[460px_minmax(0,1fr)]">
 
@@ -71,11 +82,12 @@ export default function PortalPage() {
                 <span className="text-blue-600">Repay on your terms.</span>
               </h1>
               <p className="max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base xl:text-lg">
-                Use your email and reference number to access your account, check payment plan progress, and complete repayment — all in one clear flow.
+                Use your email and reference number to access your account, check payment plan
+                progress, and complete repayment — all in one clear flow.
               </p>
             </div>
 
-            {/* Steps */}
+            {/* How it works steps */}
             <div className="space-y-3">
               {STEPS.map(({ icon: Icon, label, desc, color }, i) => (
                 <div
@@ -98,23 +110,25 @@ export default function PortalPage() {
 
             {/* Trust callout */}
             <div className="relative overflow-hidden rounded-2xl bg-slate-900 p-5 sm:p-6">
-              {/* Subtle decoration */}
               <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-blue-600/10 -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 h-20 w-20 rounded-full bg-violet-600/10 translate-y-1/2 -translate-x-1/2" />
-
               <div className="relative">
                 <div className="mb-3 flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Built for trust</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                    No password required
+                  </span>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-200 sm:text-base">
-                  Borrowers get full clarity before they pay — balance, history, and plan details all visible upfront. No back-and-forth with your lender.
+                  Your email and reference number together act as your secure two-factor identity.
+                  Your session automatically expires when the browser tab closes — keeping your
+                  account data safe.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Right — lookup form (on mobile appears first) */}
+          {/* Right — lookup form / account dashboard (on mobile appears first) */}
           <div className="order-1 min-w-0 xl:order-2">
             <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
               <div className="border-b border-slate-100 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 sm:px-6 sm:py-5">
@@ -126,7 +140,9 @@ export default function PortalPage() {
               </div>
               <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-6">
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                <p className="min-w-0 text-xs text-slate-500">Your information is secure and encrypted</p>
+                <p className="min-w-0 text-xs text-slate-500">
+                  Your information is secure and encrypted
+                </p>
               </div>
             </div>
           </div>

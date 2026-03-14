@@ -99,8 +99,8 @@ export default function RegisterPage() {
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button className="w-full" type="submit" disabled={loading}>
-            {loading ? 'Creating...' : 'Create organization'}
+          <Button className="w-full" type="submit" loading={loading}>
+            Create organization
           </Button>
         </form>
 

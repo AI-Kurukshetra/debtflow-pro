@@ -167,9 +167,10 @@ export function CampaignsList({
             <Button variant="outline" onClick={() => setConfirmId(null)}>Cancel</Button>
             <Button
               onClick={sendCampaign}
-              disabled={!canManage || sending || countLoading || matchingCount === 0 || !!countError}
+              disabled={!canManage || countLoading || matchingCount === 0 || !!countError}
+              loading={sending}
             >
-              {sending ? 'Sending...' : 'Confirm send'}
+              Confirm send
             </Button>
           </div>
         </DialogContent>

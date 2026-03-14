@@ -39,7 +39,7 @@ export default async function DebtorsPage({
 
   let query = supabase
     .from('debtors')
-    .select('id, full_name, reference_number, outstanding_amount, days_overdue, status, risk_score, risk_label')
+    .select('id, full_name, email, reference_number, outstanding_amount, days_overdue, status, risk_score, risk_label')
     .eq('org_id', orgId)
     .order('days_overdue', { ascending: false })
 
@@ -49,16 +49,16 @@ export default async function DebtorsPage({
   const { data: debtorsData, error } = await query
   const debtors = (debtorsData ?? []) as Pick<
     Tables<'debtors'>,
-    'id' | 'full_name' | 'reference_number' | 'outstanding_amount' | 'days_overdue' | 'status' | 'risk_score' | 'risk_label'
+    'id' | 'full_name' | 'email' | 'reference_number' | 'outstanding_amount' | 'days_overdue' | 'status' | 'risk_score' | 'risk_label'
   >[]
   const debtorIds = debtors.map((debtor) => debtor.id)
   const { data: communicationData } = debtorIds.length
     ? await supabase
-        .from('communications')
-        .select('debtor_id, sent_at')
-        .eq('org_id', orgId)
-        .in('debtor_id', debtorIds)
-        .order('sent_at', { ascending: false })
+      .from('communications')
+      .select('debtor_id, sent_at')
+      .eq('org_id', orgId)
+      .in('debtor_id', debtorIds)
+      .order('sent_at', { ascending: false })
     : { data: [] }
   const communications = (communicationData ?? []) as Pick<Tables<'communications'>, 'debtor_id' | 'sent_at'>[]
   const lastContactByDebtor = new Map<string, string>()

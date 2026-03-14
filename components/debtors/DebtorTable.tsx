@@ -9,7 +9,7 @@ import type { Tables } from '@/lib/types'
 
 export type DebtorListItem = Pick<
   Tables<'debtors'>,
-  'id' | 'full_name' | 'reference_number' | 'outstanding_amount' | 'days_overdue' | 'status' | 'risk_score' | 'risk_label'
+  'id' | 'full_name' | 'email' | 'reference_number' | 'outstanding_amount' | 'days_overdue' | 'status' | 'risk_score' | 'risk_label'
 > & {
   last_contact_at: string | null
 }
@@ -48,7 +48,15 @@ export function DebtorTable({ debtors }: { debtors: DebtorListItem[] }) {
             >
               <TableCell>
                 <div className="font-medium text-gray-900">{debtor.full_name}</div>
-                <div className="text-xs text-gray-500">{debtor.reference_number}</div>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                  <span>{debtor.reference_number}</span>
+                  {debtor.email && (
+                    <>
+                      <span className="w-0.5 h-0.5 rounded-full bg-gray-300" />
+                      <span className="truncate">{debtor.email}</span>
+                    </>
+                  )}
+                </div>
                 <div className="text-sm font-semibold text-gray-900 mt-1 sm:hidden">
                   {formatCurrency(Number(debtor.outstanding_amount))}
                 </div>

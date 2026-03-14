@@ -69,7 +69,15 @@ export function DebtorDetail({
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">{debtor.full_name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{debtor.reference_number}</p>
+            <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+              <span>{debtor.reference_number}</span>
+              {debtor.email && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-gray-300" />
+                  <span>{debtor.email}</span>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={debtor.status} />
@@ -183,9 +191,9 @@ export function DebtorDetail({
                           size="sm"
                           variant="outline"
                           onClick={() => logResponse(c.id, c.campaign_id!)}
-                          disabled={responseLoadingId === c.id}
+                          loading={responseLoadingId === c.id}
                         >
-                          {responseLoadingId === c.id ? 'Saving...' : 'Log Response'}
+                          Log Response
                         </Button>
                       ) : null}
                     </div>

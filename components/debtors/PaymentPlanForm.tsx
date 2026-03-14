@@ -85,8 +85,8 @@ export function PaymentPlanForm({ debtorId, orgId, onComplete }: { debtorId: str
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading || !orgId}>
-        {loading ? 'Creating...' : 'Create payment plan'}
+      <Button type="submit" loading={loading} disabled={!orgId}>
+        Create payment plan
       </Button>
     </form>
   )
