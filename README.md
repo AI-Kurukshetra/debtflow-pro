@@ -1,36 +1,150 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DebtFlow Pro
 
-## Getting Started
+**AI-powered debt recovery for mid-market lenders and credit unions.**
 
-First, run the development server:
+DebtFlow Pro gives collector teams a single place to prioritize debtors, run outreach campaigns, and track payments—and gives borrowers a simple, mobile-friendly portal to view their balance and pay online. No paid third-party APIs; built to deploy and demo quickly.
+
+---
+
+## Features
+
+| For collectors | For borrowers |
+|----------------|---------------|
+| **Portfolio view** — Debtors with balances, statuses, risk scores, contact history | **Self-service portal** — Look up account with email + reference number (no login) |
+| **Risk scoring** — Built-in deterministic scoring (low → critical) | **Balance & plan** — See outstanding amount, payment plan, installments |
+| **Campaigns** — Create and “send” outreach; track who was contacted | **Pay online** — Card checkout with real validation; balance updates in real time |
+| **Payment plans** — Create plans with installments; track paid/overdue | **Payment history** — Recent payments and receipts |
+| **Analytics** — Recovery trends, status breakdown, campaign performance | **Mobile-friendly** — Usable on any device |
+
+Payments and communications are **simulated** (records in your database only)—no payment gateway or SMS/email providers. Ideal for demos, hackathons, and controlled rollouts.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16 (App Router) |
+| Database & auth | Supabase (PostgreSQL + RLS) |
+| Styling | Tailwind CSS 4 |
+| UI | shadcn/ui, Recharts, lucide-react |
+| Deployment | Vercel |
+
+---
+
+## Prerequisites
+
+- **Node.js** 
+- **npm** (or yarn/pnpm)
+- **Supabase** project ([supabase.com](https://supabase.com))
+
+---
+
+## Quick start
+
+### 1. Clone and install
+
+```bash
+git clone <your-repo-url>
+cd debtflow-pro
+npm install
+```
+
+### 2. Environment variables
+
+Create `.env.local` in the project root:
+
+```env
+# From Supabase: Project Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Server-only (e.g. seed). Never expose to the client.
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Protects the /api/seed endpoint
+SEED_SECRET=debtflow-seed-2026
+```
+
+### 3. Database
+
+Apply the schema and (if needed) run migrations from `supabase/migrations/` in your Supabase project (SQL Editor or CLI).
+
+### 4. Seed demo data
+
+Start the app, then run the seed once:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+In another terminal:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+curl -X POST http://localhost:3000/api/seed \
+  -H "x-seed-secret: debtflow-seed-2026"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Run the app
 
-## Learn More
+- **App:** [http://localhost:3000](http://localhost:3000)
+- **Collector login:** [http://localhost:3000/login](http://localhost:3000/login)
+- **Borrower portal:** [http://localhost:3000/portal](http://localhost:3000/portal)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Demo credentials
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+After seeding:
 
-## Deploy on Vercel
+| Role | Email | Password |
+|------|--------|----------|
+| Collector (Apex Credit Union) | `demo@debtflowpro.com` | `Demo1234!` |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Use this account to explore the dashboard, debtors, campaigns, payment plans, and analytics. For the **borrower portal**, use the same seeded debtor email and reference number (e.g. from the debtors list) to look up an account and make a payment.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Scripts
+
+| Command | Description |
+|---------|--------------|
+| `npm run dev` | Start Next.js dev server |
+| `npm run build` | Production build |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
+
+---
+
+## Project structure
+
+```
+debtflow-pro/
+├── app/
+│   ├── (auth)/          # Login, register
+│   ├── (dashboard)/     # Dashboard, debtors, campaigns, payments, analytics
+│   ├── portal/          # Public borrower portal
+│   └── api/              # Seed, score, campaign send, portal lookup/pay
+├── components/           # UI, layout, debtors, campaigns, analytics, portal
+├── lib/                  # Supabase clients, scoring, seed, types, utils
+└── supabase/
+    └── migrations/       # Schema and RLS
+```
+
+---
+
+## Deployment (Vercel)
+
+1. Push the repo and import the project in Vercel.
+2. Add the same environment variables in the Vercel dashboard.
+3. Deploy. After the first deploy, run the seed once:
+   ```bash
+   curl -X POST https://your-app.vercel.app/api/seed \
+     -H "x-seed-secret: debtflow-seed-2026"
+   ```
+4. Confirm:
+   - Login at `/login` with the demo credentials
+   - Portal at `/portal` loads without auth
+   - Debtors and campaigns show seeded data
+
+---

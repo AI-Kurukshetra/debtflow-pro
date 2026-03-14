@@ -30,8 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env (do not commit secrets; add .env.example to repo if you want a template)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # vercel
 .vercel
@@ -39,3 +43,22 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE / editor
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.marscode
+
+# OS
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Supabase (local CLI state; keep supabase/migrations in repo)
+supabase/.branches
+supabase/.temp
+supabase/.env
+supabase/.env.local
