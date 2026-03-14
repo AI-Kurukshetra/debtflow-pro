@@ -38,40 +38,40 @@ const METHOD_CARDS = [
     bg: 'bg-violet-50',
     iconColor: 'text-violet-600',
     title: 'Outreach Orchestration',
-    description: 'Run reminder campaigns, log communication outcomes, and keep campaign sends visible for your team.',
-    points: ['Bulk campaign actions', 'Per-debtor communication history'],
+    description: 'Automate reminder campaigns, track communication outcomes, and equip your team with full conversation history.',
+    points: ['Multi-channel campaigns', 'Per-debtor communication logs'],
   },
   {
     icon: ShieldCheck,
     color: 'from-emerald-500 to-emerald-600',
     bg: 'bg-emerald-50',
     iconColor: 'text-emerald-600',
-    title: 'Trust-First Self Service',
-    description: 'Give debtors a clean portal that feels real, lowers friction, and supports payment-plan conversations.',
-    points: ['Reference-based lookup', 'Self-service payment recording'],
+    title: 'Borrower Self-Service',
+    description: 'Provide borrowers with a secure, accessible portal to review their balances, set up payment plans, and resolve debt.',
+    points: ['Reference-based login', 'Frictionless payment collection'],
   },
 ]
 
 const FEATURES = [
   {
     icon: BarChart3,
-    title: 'Recovery Intelligence Dashboard',
-    description: 'Show balances, overdue segments, campaign performance, and repayment progress in a layout that looks credible at first glance.',
+    title: 'Actionable Analytics',
+    description: 'Stop guessing and start recovering. Get a real-time view of your portfolio’s health. Track outstanding balances, prioritize overdue segments by AI risk score, and monitor repayment progress—all from a single, intuitive interface.',
     tag: 'Analytics',
     tagColor: 'bg-blue-100 text-blue-700',
   },
   {
     icon: Layers3,
-    title: 'Seamless Workflow Clarity',
-    description: 'The homepage, dashboard, and portal are aligned so you can move from landing to dashboard to portal without friction.',
+    title: 'Frictionless Collections Workflow',
+    description: 'Align your entire recovery process in one place. Move seamlessly from managing debtor accounts to executing multichannel campaigns, keeping your team focused on what matters most: recovery.',
     tag: 'Workflow',
     tagColor: 'bg-violet-100 text-violet-700',
   },
   {
     icon: FileCheck2,
-    title: 'Launch-Ready Setup',
-    description: 'Pre-loaded accounts, visible metrics, and clear product sections so you can present a polished, launch-ready platform.',
-    tag: 'Setup',
+    title: 'Debtor Self-Service Portal',
+    description: 'Increase repayment rates by removing barriers. Give your borrowers access to a secure, mobile-friendly portal to check balances and resolve their debt instantly—no frustrating logins required.',
+    tag: 'Portal',
     tagColor: 'bg-emerald-100 text-emerald-700',
   },
 ]
@@ -147,7 +147,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-lg text-slate-600 leading-relaxed mb-8 max-w-lg">
-                  DebtFlow Pro helps lender teams manage debtors, run campaigns, track payments, and demonstrate a complete recovery workflow in one polished platform.
+                  DebtFlow Pro equips lender teams with the tools to manage portfolios, automate outreach, and accelerate collections—all within a single, secure platform.
                 </p>
 
                 <div className="flex flex-wrap gap-3 mb-10">
@@ -198,9 +198,9 @@ export default function Home() {
                   {/* Activity */}
                   <div className="p-5 space-y-3">
                     {[
-                      { icon: Users, title: 'High-risk segment', desc: '23 accounts require collector follow-up', color: 'text-red-500', bg: 'bg-red-50' },
-                      { icon: MessageSquareMore, title: 'Campaign activity', desc: 'Reminders and payment-plan nudges active', color: 'text-blue-500', bg: 'bg-blue-50' },
-                      { icon: ShieldCheck, title: 'Portal readiness', desc: 'Public self-service journey ready for borrowers', color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                      { icon: Users, title: 'High-risk segment', desc: '23 accounts require immediate collector follow-up', color: 'text-red-500', bg: 'bg-red-50' },
+                      { icon: MessageSquareMore, title: 'Campaign activity', desc: 'Q1 Reminder campaign delivered to 450 accounts', color: 'text-blue-500', bg: 'bg-blue-50' },
+                      { icon: ShieldCheck, title: 'Portal engagement', desc: '14 borrowers initiated payment plans today', color: 'text-emerald-500', bg: 'bg-emerald-50' },
                     ].map(({ icon: Icon, title, desc, color, bg }) => (
                       <div key={title} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
                         <div className={`rounded-lg ${bg} p-2 shrink-0`}>
@@ -243,7 +243,7 @@ export default function Home() {
             <div className="text-center max-w-2xl mx-auto mb-14">
               <p className="text-sm font-bold uppercase tracking-widest text-blue-600 mb-3">Core Workflows</p>
               <h2 className="text-4xl font-bold tracking-tight text-slate-900 mb-4">Built around what matters most in debt recovery</h2>
-              <p className="text-lg text-slate-600">Clear sections, direct copy, and structured product cards make the story easier to understand.</p>
+              <p className="text-lg text-slate-600">Minimize defaults and maximize collections. DebtFlow Pro gives mid-market lenders the tools to automate outreach, score risk, and recover outstanding balances with zero friction.</p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
@@ -274,8 +274,8 @@ export default function Home() {
         <section id="features" className="py-24 bg-white">
           <div className="mx-auto max-w-7xl px-6">
             <div className="max-w-2xl mb-14">
-              <p className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-3">Everything You Need</p>
-              <h2 className="text-4xl font-bold tracking-tight text-slate-900">A cleaner structure, more believable product framing.</h2>
+              <p className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-3">AI-Powered Debt Recovery</p>
+              <h2 className="text-4xl font-bold tracking-tight text-slate-900">Stop guessing and start recovering with confidence.</h2>
             </div>
 
             <div className="space-y-4">
